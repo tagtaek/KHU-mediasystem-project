@@ -13,7 +13,8 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
-
+#include <utility>
+#include <map>
 
 
 typedef unsigned int int32;
@@ -309,6 +310,55 @@ void PrintDCValues(const std::vector<int>& values) {
     std::cout << "\n";
 }
 
+// DC 빈도 계산
+void CalculateDCFrequency(const std::vector<int>& dpcmValues, std::map<int, int>& dcFrequency) {
+    for (int value : dpcmValues) {
+        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1; // DC 값의 길이(SIZE)
+        dcFrequency[size]++;
+    }
+}
+
+// RLC 수행 함수
+void PerformRLC(const std::vector<int>& acValues, std::vector<std::pair<int, int> >& rlcResults) {
+    int skipCount = 0;
+
+    for (size_t i = 1; i < acValues.size(); ++i) { // DC를 제외하고 처리
+        if (acValues[i] == 0) {
+            skipCount++;
+            if (skipCount == 15) { // 최대 15개의 연속된 0
+                rlcResults.push_back(std::make_pair(15, 0));
+                skipCount = 0;
+            }
+        } else {
+            rlcResults.push_back(std::make_pair(skipCount, acValues[i]));
+            skipCount = 0;
+        }
+    }
+
+    // 블록의 끝을 (0, 0)으로 마무리
+    rlcResults.push_back(std::make_pair(0, 0));
+}
+
+// RLC 결과 출력 함수
+void PrintRLCResults(const std::vector<std::pair<int, int> >& rlcResults) {
+    for (const std::pair<int, int>& pair : rlcResults) {
+        std::cout << "(" << pair.first << ", " << pair.second << ") ";
+    }
+    std::cout << "\n";
+}
+
+// AC 빈도 계산
+void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, std::map<std::string, int>& acFrequency) {
+    for (const auto& pair : rlcResults) {
+        int skip = pair.first;
+        int value = pair.second;
+        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1;
+
+        std::string key = std::to_string(skip) + "/" + std::to_string(size);
+        acFrequency[key]++;
+    }
+}
+
 int main()
 {
     bmp_byte* pixels;
@@ -325,8 +375,8 @@ int main()
 
     delete[] pixels;
 
-    std::vector<int> dcValues; // 각 블록의 DC 값 저장
-
+    std::vector<int> dcValues; // DC값 저장
+    std::vector<std::pair<int, int> > rlcResults; // RLC 결과 저장
 
     // 각 블록에 대해 DCT 수행
     for (size_t i = 0; i < blocks.size(); ++i) {
@@ -354,7 +404,23 @@ int main()
         // std::cout << "Block " << i << " Zigzag Scanned Result:\n";
         // PrintZigzagArray(zigzagArray);
         // std::cout << "----------------------\n";
-        
+
+         // DC 값 추출 (zigzagArray의 첫 번째 값)
+        if (!zigzagArray.empty()) {
+        dcValues.push_back(zigzagArray[0]);
+        }
+
+        // AC 값만 추출 (DC 제외)
+        std::vector<int> acValues(zigzagArray.begin() + 1, zigzagArray.end());
+
+        // RLC 수행
+        rlcResults.clear(); // 초기화
+        PerformRLC(acValues, rlcResults);
+
+        // RLC 결과 출력
+        // std::cout << "Block " << i << " RLC Result:\n";
+        // PrintRLCResults(rlcResults);
+        // std::cout << "----------------------\n";
     }
 
     
@@ -387,3 +453,5 @@ int main()
     return 0;
 }
 
+// 살행 명령어 : 
+// g++ -std=c++11 main.cpp -o main && ./main
