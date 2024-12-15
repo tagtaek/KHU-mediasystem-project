@@ -1,5 +1,7 @@
 #include <iostream> 
 #include <vector>
+#include <map>
+
 using namespace std;
 
 struct node
@@ -13,51 +15,56 @@ struct node
 
 vector<node> nodeArray; 
 
-void getHuffmanCode();
+void getHuffmanCode(const std::map<int, int>& frequencyMap);
+void getHuffmanCodeForAC(const std::map<std::pair<int, int>, int>& frequencyMap);
 node getHuffmanTree();
 node extractMin();
 void depthFirstSearch(node* tempRoot, string s); 
 
 
-void getHuffmanCode()
-{
-	int size;
-	unsigned int tempInt;
-	char alphabet;
+void getHuffmanCode(const std::map<int, int>& frequencyMap) {
+	nodeArray.clear();
 
-	// 데이터에 사용되는 문자의 종류 갯수 입력
-	cout << endl;
-	cout << "\t" << "Huffman Tree : ";
-	cin >> size;
-
-	cout << endl << endl;
-	cout << "\t" << "symbol freq" << endl;
-	cout << "\t" << "----------------------" << endl; 
-
-	// 각 문자별 빈도 수 노드 생성
-	for (int i = 0; i < size; i++)
-	{
-		cout << "\t";
-		node tempNode;
-		cin >> alphabet;
-		cin >> tempInt;
-
-		tempNode.characters = alphabet;
-		tempNode.frequency = tempInt;
-		tempNode.leftChild = NULL;
-		tempNode.rightChild = NULL;
-		nodeArray.push_back(tempNode);
-	}
+    // 빈도 맵을 노드 배열로 변환
+    for (const auto& entry : frequencyMap) {
+        node tempNode;
+        tempNode.characters = std::to_string(entry.first); // SIZE 또는 AC 키 값
+        tempNode.frequency = entry.second;
+        tempNode.leftChild = nullptr;
+        tempNode.rightChild = nullptr;
+        nodeArray.push_back(tempNode);
+    }
 
 	//Huffman Tree 생성 
 	node root = getHuffmanTree();
 
-	cout << endl << endl;
-	cout << "\t" << "symbol" << "\t" << "Code" << endl;
-	cout << "\t" << "----------------------" << endl;
+	std::cout << "\nHuffman Coding Table:\n";
+    std::cout << "Symbol\tCode\n";
+    std::cout << "-----------------\n";
 
 	//Huffman Coding Table 생성
 	depthFirstSearch(&root, "");
+}
+
+void getHuffmanCodeForAC(const std::map<std::pair<int, int>, int>& frequencyMap) {
+    nodeArray.clear();
+    for (const auto& entry : frequencyMap) {
+        node tempNode;
+        tempNode.characters = "(" + std::to_string(entry.first.first) + "," + std::to_string(entry.first.second) + ")";
+        tempNode.frequency = entry.second;
+        tempNode.leftChild = NULL;
+        tempNode.rightChild = NULL;
+        nodeArray.push_back(tempNode);
+    }
+
+    // Huffman Tree 생성
+    node root = getHuffmanTree();
+
+    // Huffman 코드 출력
+    std::cout << "AC Huffman Coding Table:\n";
+    std::cout << "Symbol\tCode\n";
+    std::cout << "-----------------\n";
+    depthFirstSearch(&root, "");
 }
 
 node getHuffmanTree()

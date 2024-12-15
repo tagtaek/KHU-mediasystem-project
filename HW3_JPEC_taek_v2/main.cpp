@@ -14,7 +14,6 @@
 #include <cmath>
 #include <vector>
 #include <utility>
-#include <map>
 
 
 typedef unsigned int int32;
@@ -310,11 +309,10 @@ void PrintDCValues(const std::vector<int>& values) {
     std::cout << "\n";
 }
 
-// DC 빈도 계산
-void CalculateDCFrequency(const std::vector<int>& dpcmValues, std::map<int, int>& dcFrequency) {
+// DPCM 값의 빈도를 계산하는 함수
+void CalculateDCFrequency(const std::vector<int>& dpcmValues, std::map<int, int>& frequencyMap) {
     for (int value : dpcmValues) {
-        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1; // DC 값의 길이(SIZE)
-        dcFrequency[size]++;
+        frequencyMap[value]++;
     }
 }
 
@@ -348,14 +346,9 @@ void PrintRLCResults(const std::vector<std::pair<int, int> >& rlcResults) {
 }
 
 // AC 빈도 계산
-void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, std::map<std::string, int>& acFrequency) {
+void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, std::map<std::pair<int, int>, int>& acFrequencyMap) {
     for (const auto& pair : rlcResults) {
-        int skip = pair.first;
-        int value = pair.second;
-        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1;
-
-        std::string key = std::to_string(skip) + "/" + std::to_string(size);
-        acFrequency[key]++;
+        acFrequencyMap[pair]++;
     }
 }
 
@@ -377,6 +370,10 @@ int main()
 
     std::vector<int> dcValues; // DC값 저장
     std::vector<std::pair<int, int> > rlcResults; // RLC 결과 저장
+
+    // huffman 수행을 위한 빈도 맵
+    std::map<int, int> DCfrequencyMap;
+    std::map<std::pair<int, int>, int> acFrequencyMap;
 
     // 각 블록에 대해 DCT 수행
     for (size_t i = 0; i < blocks.size(); ++i) {
@@ -416,23 +413,25 @@ int main()
         // RLC 수행
         rlcResults.clear(); // 초기화
         PerformRLC(acValues, rlcResults);
+        CalculateACFrequency(rlcResults, acFrequencyMap);
 
+        // std::cout << "\nAC Huffman Codes:\n";
+        // getHuffmanCode(acFrequency);
         // RLC 결과 출력
         // std::cout << "Block " << i << " RLC Result:\n";
         // PrintRLCResults(rlcResults);
         // std::cout << "----------------------\n";
     }
-
     
     // DPCM 수행
     std::vector<int> dpcmValues;
     PerformDPCM(dcValues, dpcmValues);
+    CalculateDCFrequency(dpcmValues, DCfrequencyMap);
 
     // DPCM 결과 출력
     std::cout << "DPCM Result:\n";
     PrintDCValues(dpcmValues);
     std::cout << "----------------------\n";
-    // getHuffmanCode();
 
     // 8x8 블록 테스트 데이터 (임의의 예제 데이터)
     // std::vector<bmp_byte> testBlock = {
@@ -449,6 +448,14 @@ int main()
     // double dctBlock[8][8] = {0};
     // PerformDCT(testBlock, dctBlock);
     // PrintDCTBlock(dctBlock); // 결과 출력
+
+    // DC 값 허프만 코드 생성
+    std::cout << "\nDC Huffman Codes:\n";
+    getHuffmanCode(DCfrequencyMap);
+
+    // AC 값 허프만 코드 생성
+    std::cout << "AC Huffman Codes:\n";
+    getHuffmanCodeForAC(acFrequencyMap);
 
     return 0;
 }
