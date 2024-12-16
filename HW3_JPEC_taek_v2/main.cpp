@@ -289,6 +289,8 @@ void PrintZigzagArray(const std::vector<int>& zigzagArray) {
     }
 }
 
+//-------------------DC---------------------
+
 // DPCM 수행 함수
 void PerformDPCM(const std::vector<int>& dcValues, std::vector<int>& dpcmValues) {
     if (dcValues.empty()) return;
@@ -315,6 +317,51 @@ void CalculateDCFrequency(const std::vector<int>& dpcmValues, std::map<int, int>
         frequencyMap[value]++;
     }
 }
+// dpcm된 값들의 size 계산
+int CalculateSize(int value) {
+    if (value == 0) return 0; // DPCM 값이 0일 경우 SIZE도 0
+    return static_cast<int>(std::log2(std::abs(value)) + 1);
+}
+
+// dpcm을 sigend 이진수로 변환
+std::string EncodeAmplitude(int value, int size) {
+    if (value >= 0) {
+        // 양수는 그대로 이진 표현
+        return std::bitset<32>(value).to_string().substr(32 - size);
+    } else {
+        // 음수는 2의 보수로 부호화
+        int magnitude = (1 << size) + value; // value가 음수임
+        return std::bitset<32>(magnitude).to_string().substr(32 - size);
+    }
+}
+
+std::string EncodeDPCMValues(const std::vector<int>& dpcmValues, const std::map<int, std::string>& dcHuffmanTable) {
+    std::string encodedData; // 결과 문자열을 저장할 변수
+
+    for (const int value : dpcmValues) {
+        // 1. SIZE 계산
+        int size = CalculateSize(value);
+
+        // 2. SIZE를 허프만 코딩
+        auto huffmanCodeIt = dcHuffmanTable.find(size);
+        if (huffmanCodeIt == dcHuffmanTable.end()) {
+            std::cerr << "Error: Huffman code for size " << size << " not found!" << std::endl;
+            continue;
+        }
+        std::string huffmanCode = huffmanCodeIt->second;
+
+        // 3. DPCM 값을 크기만큼 이진화
+        std::string amplitudeBits = EncodeAmplitude(value, size);
+
+        // 4. 허프만 코드 + 이진화된 값을 결합
+        encodedData += huffmanCode + amplitudeBits;
+    }
+
+    return encodedData;
+}
+
+
+//--------------------------AC-----------------------------
 
 // RLC 수행 함수
 void PerformRLC(const std::vector<int>& acValues, std::vector<std::pair<int, int> >& rlcResults) {
@@ -346,13 +393,48 @@ void PrintRLCResults(const std::vector<std::pair<int, int> >& rlcResults) {
 }
 
 // AC 빈도 계산
-void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, std::map<std::pair<int, int>, int>& acFrequencyMap) {
+void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, std::map<std::string, int>& acFrequency) {
     for (const auto& pair : rlcResults) {
-        acFrequencyMap[pair]++;
+        int skip = pair.first;
+        int value = pair.second;
+        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1;
+
+        std::string key = std::to_string(skip) + "/" + std::to_string(size);
+        acFrequency[key]++;
     }
 }
 
-// @@@@ 압축된 데이터 쓰기 @@@@
+std::string EncodeACValues(const std::vector<std::pair<int, int>>& rlcResults, const std::map<std::string, std::string>& acHuffmanTable) {
+    std::string encodedData; // 결과 문자열 저장
+
+    for (const auto& pair : rlcResults) {
+        int skip = pair.first;    // RLC에서 skip 값
+        int value = pair.second;  // RLC에서 값
+        int size = (value == 0) ? 0 : (int)log2(abs(value)) + 1;
+
+        // 1. 허프만 키 생성 ("skip/size")
+        std::string key = std::to_string(skip) + "/" + std::to_string(size);
+
+        // 2. 허프만 코드 가져오기
+        auto huffmanCodeIt = acHuffmanTable.find(key);
+        if (huffmanCodeIt == acHuffmanTable.end()) {
+            std::cerr << "Error: Huffman code for key " << key << " not found!" << std::endl;
+            continue;
+        }
+        std::string huffmanCode = huffmanCodeIt->second;
+
+        // 3. Value를 크기(size)만큼 이진화
+        std::string amplitudeBits = EncodeAmplitude(value, size);
+
+        // 4. 허프만 코드 + 이진화된 값을 결합
+        encodedData += huffmanCode + amplitudeBits;
+    }
+
+    return encodedData;
+}
+
+// ---------------Write data-------------------------------
+
 // Quantization Table 저장
 void WriteQuantizationTable(std::ofstream& outFile, const int quantizationTable[8][8]) {
     for (int i = 0; i < 8; ++i) {
@@ -362,25 +444,44 @@ void WriteQuantizationTable(std::ofstream& outFile, const int quantizationTable[
     }
 }
 
-// 허프만 테이블 저장 (DC 및 AC 모두 지원)
-template<typename KeyType>
-void WriteHuffmanTable(std::ofstream& outFile, const std::map<KeyType, std::string>& huffmanTable) {
+void WriteHuffmanTable(std::ofstream& outFile, const std::map<int, std::string>& huffmanTable) {
     size_t size = huffmanTable.size();
     outFile.write(reinterpret_cast<const char*>(&size), sizeof(size)); // 테이블 크기 저장
     
     for (const auto& entry : huffmanTable) {
-        outFile.write(reinterpret_cast<const char*>(&entry.first), sizeof(entry.first)); // 심볼 또는 (Run/Size)
+        outFile.write(reinterpret_cast<const char*>(&entry.first), sizeof(entry.first)); // 심볼 (int)
         size_t codeLength = entry.second.size();
         outFile.write(reinterpret_cast<const char*>(&codeLength), sizeof(codeLength));   // 코드 길이
         outFile.write(entry.second.c_str(), codeLength); // 허프만 코드
     }
 }
 
-// 압축 데이터 저장
 void WriteCompressedData(std::ofstream& outFile, const std::string& compressedData) {
-    size_t length = compressedData.size();
-    outFile.write(reinterpret_cast<const char*>(&length), sizeof(length)); // 데이터 길이
-    outFile.write(compressedData.c_str(), length); // 데이터 저장
+    size_t bitLength = compressedData.size();
+    outFile.write(reinterpret_cast<const char*>(&bitLength), sizeof(bitLength)); // 전체 비트 길이 저장
+
+    // 비트 데이터를 바이트 단위로 변환하여 저장
+    for (size_t i = 0; i < bitLength; i += 8) {
+        std::string byteString = compressedData.substr(i, 8); // 8비트씩 잘라서 처리
+        while (byteString.size() < 8) byteString += "0";     // 마지막 바이트 패딩
+        unsigned char byte = std::bitset<8>(byteString).to_ulong(); // 비트셋을 바이트로 변환
+        outFile.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+    }
+}
+
+void WriteHuffmanTable(std::ofstream& outFile, const std::map<std::string, std::string>& huffmanTable) {
+    size_t size = huffmanTable.size();
+    outFile.write(reinterpret_cast<const char*>(&size), sizeof(size)); // 테이블 크기 저장
+    
+    for (const auto& entry : huffmanTable) {
+        size_t keyLength = entry.first.size();
+        outFile.write(reinterpret_cast<const char*>(&keyLength), sizeof(keyLength)); // 키 길이
+        outFile.write(entry.first.c_str(), keyLength); // 심볼 (string)
+        
+        size_t codeLength = entry.second.size();
+        outFile.write(reinterpret_cast<const char*>(&codeLength), sizeof(codeLength)); // 코드 길이
+        outFile.write(entry.second.c_str(), codeLength); // 허프만 코드
+    }
 }
 
 // 압축률률 계산 및 비교 함수
@@ -422,14 +523,13 @@ int main()
 
     std::vector<int> dcValues; // DC값 저장
     std::vector<std::pair<int, int> > rlcResults; // RLC 결과 저장
+    std::map<std::string, int> acFrequency; // AC 빈도 맵 생성
 
-    // huffman 수행을 위한 빈도 맵
-    std::map<int, int> DCfrequencyMap;
-    std::map<std::pair<int, int>, int> acFrequencyMap;
 
-    // 각 블록에 대해 DCT 수행
+    // 각 블록에 대해 수행
     for (size_t i = 0; i < blocks.size(); ++i) {
         double dctBlock[8][8] = {0};
+        // DCT 수행
         PerformDCT(blocks[i], dctBlock);
 
         // DCT 결과 출력 (옵션)
@@ -463,68 +563,73 @@ int main()
         std::vector<int> acValues(zigzagArray.begin() + 1, zigzagArray.end());
 
         // RLC 수행
-        rlcResults.clear(); // 초기화
-        PerformRLC(acValues, rlcResults);
-        CalculateACFrequency(rlcResults, acFrequencyMap);
+        std::vector<std::pair<int, int>> blockRLCResults; // 각 블록의 RLC 결과
+        PerformRLC(acValues, blockRLCResults);
 
-        // std::cout << "\nAC Huffman Codes:\n";
-        // getHuffmanCode(acFrequency);
-        // RLC 결과 출력
+        // // RLC 결과 출력
         // std::cout << "Block " << i << " RLC Result:\n";
-        // PrintRLCResults(rlcResults);
+        // PrintRLCResults(blockRLCResults);
         // std::cout << "----------------------\n";
+
+        // 6. RLC 결과를 전체 AC 데이터에 합침
+        rlcResults.insert(rlcResults.end(), blockRLCResults.begin(), blockRLCResults.end());
     }
     
     // DPCM 수행
     std::vector<int> dpcmValues;
     PerformDPCM(dcValues, dpcmValues);
-    CalculateDCFrequency(dpcmValues, DCfrequencyMap);
-
     // DPCM 결과 출력
     // std::cout << "DPCM Result:\n";
     // PrintDCValues(dpcmValues);
     // std::cout << "----------------------\n";
 
-    // 8x8 블록 테스트 데이터 (임의의 예제 데이터)
-    // std::vector<bmp_byte> testBlock = {
-    //     52, 55, 61, 66, 70, 61, 64, 73,
-    //     63, 59, 55, 90, 109, 85, 69, 72,
-    //     62, 59, 68, 113, 144, 104, 66, 73,
-    //     63, 58, 71, 122, 154, 106, 70, 69,
-    //     67, 61, 68, 104, 126, 88, 68, 70,
-    //     79, 65, 60, 70, 77, 68, 58, 75,
-    //     85, 71, 64, 59, 55, 61, 65, 83,
-    //     87, 79, 69, 68, 65, 76, 78, 94
-    // };
+    // std::string compressedDCData; // 최종 압축 데이터를 저장할 문자열
+    std::map<int, int> frequencyMap;
+    for (const int value : dpcmValues) {
+        // 1. DPCM 값의 SIZE 계산
+        int size = CalculateSize(value);
+        frequencyMap[size]++;
+    }
 
-    // double dctBlock[8][8] = {0};
-    // PerformDCT(testBlock, dctBlock);
-    // PrintDCTBlock(dctBlock); // 결과 출력
+    // DC허프만 테이블 생성
+    std::map<int, std::string> dcHuffmanTable;
+    getDCHuffmanCode(frequencyMap, dcHuffmanTable);
+    // std::cout << "\nGenerated Huffman Table for DC:\n";
+    // for (const auto& entry : dcHuffmanTable) {
+    // std::cout << "Size: " << entry.first << " -> Code: " << entry.second << std::endl;
 
-    std::map<int, std::string> dcHuffmanTable; // DC Huffman Table
-    std::map<std::pair<int, int>, std::string> acHuffmanTable; // AC Huffman Table
-    std::string compressedDCData, compressedACData; // 압축된 데이터
+    // 압축된 DC데이터
+    std::string compressedDCData = EncodeDPCMValues(dpcmValues, dcHuffmanTable);
+    // 결과 출력
+    // std::cout << "Compressed DC Data (Huffman Encoded):" << std::endl;
+    // std::cout << compressedDCData << std::endl;
 
-    // DC 값 허프만 코드 생성
-    std::cout << "\nDC Huffman Codes:\n";
-    getHuffmanCode(DCfrequencyMap, dcHuffmanTable);
+    // 3. AC 빈도 계산 및 허프만 테이블 생성
+    std::map<std::string, int> acFrequencyMap;
+    CalculateACFrequency(rlcResults, acFrequencyMap);
+    std::map<std::string, std::string> acHuffmanTable;
+    getACHuffmanCode(acFrequencyMap, acHuffmanTable);
 
-    // AC 값 허프만 코드 생성
-    std::cout << "AC Huffman Codes:\n";
-    getHuffmanCodeForAC(acFrequencyMap, acHuffmanTable);
+    // AC 데이터 엔트로피 코딩
+    std::string compressedACData = EncodeACValues(rlcResults, acHuffmanTable);
 
-    // DC 및 AC 데이터 압축 코드 (생략) 후 결과 저장
-    std::ofstream outFile("compressed_Lena.dat", std::ios::binary);
-    if (outFile.is_open()) {
-        WriteQuantizationTable(outFile, quantizationTable);
-        WriteHuffmanTable(outFile, dcHuffmanTable);
-        WriteHuffmanTable(outFile, acHuffmanTable);
-        WriteCompressedData(outFile, compressedDCData);
-        WriteCompressedData(outFile, compressedACData);
-        outFile.close();
-        std::cout << "Compression completed successfully and saved to 'compressed_image.dat'." << std::endl;
+    // 결과 출력
+    std::cout << "Compressed AC Data (Huffman Encoded):" << std::endl;
+    std::cout << compressedACData << std::endl;
+
+
+    // 압축된 데이터 저장
+    std::ofstream compressedFile("compressed_Lena.dat", std::ios::binary);
+    if (compressedFile.is_open()) {
+        WriteQuantizationTable(compressedFile, quantizationTable); // 양자화 테이블
+        WriteHuffmanTable(compressedFile, dcHuffmanTable);        // DC 허프만 테이블
+        WriteHuffmanTable(compressedFile, acHuffmanTable);        // AC 허프만 테이블
+        WriteCompressedData(compressedFile, compressedDCData);   // DC 데이터
+        WriteCompressedData(compressedFile, compressedACData);   // AC 데이터
+        compressedFile.close();
+        std::cout << "Compressed data saved to 'compressed_data.bin'." << std::endl;
     } else {
-        std::cerr << "Error opening file for writing!" << std::endl;
+        std::cerr << "Error: Unable to save compressed data!" << std::endl;
     }
 
     return 0;

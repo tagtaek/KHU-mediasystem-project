@@ -13,62 +13,47 @@ struct node
 	node* rightChild;
 };
 
-vector<node> nodeArray; 
+vector<node> nodeArray;
 
-void getHuffmanCode(const std::map<int, int>& frequencyMap, std::map<int, std::string>& dcHuffmanTable);
+void getDCHuffmanCode(const std::map<int, int>& frequencyMap, std::map<int, std::string>& dcHuffmanTable);
 void getHuffmanCodeForAC(const std::map<std::pair<int, int>, int>& frequencyMap, std::map<std::pair<int, int>, std::string>& acHuffmanTable);
 node getHuffmanTree();
 node extractMin();
 void DCdepthFirstSearch(node* tempRoot, std::string s, std::map<int, std::string>& dcHuffmanTable);
-void ACdepthFirstSearch(node* tempRoot, std::string s, std::map<std::pair<int, int>, std::string>& acHuffmanTable);
-std::pair<int, int> ParseRunValue(const std::string& str); // 문자열 파싱 함수
+void ACdepthFirstSearch(node* tempRoot, string s, std::map<std::string, std::string>& acHuffmanTable);
 
+void getDCHuffmanCode(const std::map<int, int>& frequencyMap, std::map<int, std::string>& dcHuffmanTable) {
+    nodeArray.clear(); // 기존 노드 배열 초기화
 
-
-void getHuffmanCode(const std::map<int, int>& frequencyMap, std::map<int, std::string>& dcHuffmanTable) {
-	nodeArray.clear();
-
-    // 빈도 맵을 노드 배열로 변환
+    // `frequencyMap`을 순회하여 허프만 트리의 노드 배열 생성
     for (const auto& entry : frequencyMap) {
-        node tempNode;
-        tempNode.characters = std::to_string(entry.first);
-        tempNode.frequency = entry.second;
-        tempNode.leftChild = nullptr;
-        tempNode.rightChild = nullptr;
-        nodeArray.push_back(tempNode);
+        if (entry.second > 0) { // 빈도가 0이 아니어야 노드 생성
+            node tempNode;
+            tempNode.characters = std::to_string(entry.first); // SIZE 값 (심볼)
+            tempNode.frequency = entry.second;                // 빈도 수
+            tempNode.leftChild = nullptr;
+            tempNode.rightChild = nullptr;
+            nodeArray.push_back(tempNode);
+        }
     }
 
-	//Huffman Tree 생성 
-	node root = getHuffmanTree();
+    // 허프만 트리 생성
+    node root = getHuffmanTree();
 
-	std::cout << "\nHuffman Coding Table:\n";
-    std::cout << "Symbol\tCode\n";
-    std::cout << "-----------------\n";
+    // std::cout << "\nHuffman Coding Table:\n";
+    // std::cout << "Symbol\tCode\n";
+    // std::cout << "-----------------\n";
 
-	//Huffman Coding Table 생성
-	DCdepthFirstSearch(&root, "", dcHuffmanTable);
+    // 허프만 코딩 테이블 생성
+    DCdepthFirstSearch(&root, "", dcHuffmanTable);
 }
 
-// 허프만 코드를 테이블에 저장
-// void createHuffmanTable(node* root, const std::string& code, std::map<int, std::string>& dcHuffmanTable) {
-//     if (root == nullptr) return;
-
-//     if (root->leftChild == nullptr && root->rightChild == nullptr) { // 리프 노드
-//         int symbol = std::stoi(root->characters);
-//         dcHuffmanTable[symbol] = code;
-//         std::cout << symbol << "\t" << code << "\n";
-//     } else {
-//         createHuffmanTable(root->leftChild, code + "0", dcHuffmanTable);
-//         createHuffmanTable(root->rightChild, code + "1", dcHuffmanTable);
-//     }
-// }
-
-void getHuffmanCodeForAC(const std::map<std::pair<int, int>, int>& frequencyMap, std::map<std::pair<int, int>, std::string>& acHuffmanTable) {
+void getACHuffmanCode(const std::map<std::string, int>& frequencyMap, std::map<std::string, std::string>& acHuffmanTable) {
     nodeArray.clear();
     for (const auto& entry : frequencyMap) {
         node tempNode;
-        tempNode.characters = "(" + std::to_string(entry.first.first) + "," + std::to_string(entry.first.second) + ")";
-        tempNode.frequency = entry.second;
+        tempNode.characters = entry.first; // 예: "skip/size"
+        tempNode.frequency = entry.second; // 빈도 수
         tempNode.leftChild = NULL;
         tempNode.rightChild = NULL;
         nodeArray.push_back(tempNode);
@@ -82,7 +67,11 @@ void getHuffmanCodeForAC(const std::map<std::pair<int, int>, int>& frequencyMap,
     std::cout << "Symbol\tCode\n";
     std::cout << "-----------------\n";
     ACdepthFirstSearch(&root, "", acHuffmanTable);
-
+	// // AC Huffman Coding Table 확인
+	// std::cout << "\nGenerated AC Huffman Table:\n";
+	// for (const auto& entry : acHuffmanTable) {
+   	//  std::cout << "Key: " << entry.first << " -> Code: " << entry.second << std::endl;
+// }
 }
 
 node getHuffmanTree()
@@ -139,7 +128,7 @@ void DCdepthFirstSearch(node* tempRoot, string s, std::map<int, std::string>& dc
 	else if (root1->leftChild == NULL && root1->rightChild == NULL)
 	{
 		dcHuffmanTable[std::stoi(root1->characters)] = s; // 문자열을 int로 변환 후 저장 // 실제 테이블에 저장
-		cout << "\t" << root1->characters << "\t" << root1->code << endl; // 터미널에 출력
+		// cout << "\t" << root1->characters << "\t" << root1->code << endl; // 터미널에 출력
 	} 
 	else
 	{
@@ -155,38 +144,30 @@ void DCdepthFirstSearch(node* tempRoot, string s, std::map<int, std::string>& dc
 	}
 }
 
-void ACdepthFirstSearch(node* tempRoot, string s, std::map<std::pair<int, int>, std::string>& acHuffmanTable)
+void ACdepthFirstSearch(node* tempRoot, string s, std::map<std::string, std::string>& acHuffmanTable)
 {
-	node* root1 = tempRoot;
+	node* root2 = tempRoot;
 
-	root1->code = s; 
-	if (root1 == NULL)
+	root2->code = s; 
+	if (root2 == NULL)
 	{
 
 	} 
-	else if (root1->leftChild == NULL && root1->rightChild == NULL)
+	else if (root2->leftChild == NULL && root2->rightChild == NULL)
 	{
-		std::pair<int, int> key = ParseRunValue(root1->characters); // 타입 변환
-        acHuffmanTable[key] = s; // 허프만 코드 저장
-		cout << "\t" << root1->characters << "\t" << root1->code << endl; // 터미널에 출력
+        acHuffmanTable[root2->characters] = s; //실제 저장
+		// cout << "\t" << root2->characters << "\t" << root2->code << endl; // 터미널에 출력
 	} 
 	else
 	{
-		root1->leftChild->code = s.append("0"); 
+		root2->leftChild->code = s.append("0"); 
 		s.erase(s.end() - 1); 
-		root1->rightChild->code = s.append("1"); 
+		root2->rightChild->code = s.append("1"); 
 		s.erase(s.end() - 1); 
 
-		ACdepthFirstSearch(root1->leftChild, s.append("0"), acHuffmanTable); 
+		ACdepthFirstSearch(root2->leftChild, s.append("0"), acHuffmanTable); 
 		s.erase(s.end() - 1); 
-		ACdepthFirstSearch(root1->rightChild, s.append("1"), acHuffmanTable); 
+		ACdepthFirstSearch(root2->rightChild, s.append("1"), acHuffmanTable); 
 		s.erase(s.end() - 1);
 	}
-}
-
-// "(Run, Value)" 형태의 문자열을 std::pair<int, int>로 변환하는 파싱함수
-std::pair<int, int> ParseRunValue(const std::string& str) {
-    int run = 0, value = 0;
-    sscanf(str.c_str(), "(%d,%d)", &run, &value); // 문자열에서 숫자 두 개를 추출
-    return {run, value};
 }
