@@ -14,7 +14,7 @@
 #include <cmath>
 #include <vector>
 #include <utility>
-
+#include <fstream>
 
 typedef unsigned int int32;
 typedef short int16;
@@ -352,6 +352,58 @@ void CalculateACFrequency(const std::vector<std::pair<int, int>>& rlcResults, st
     }
 }
 
+// @@@@ 압축된 데이터 쓰기 @@@@
+// Quantization Table 저장
+void WriteQuantizationTable(std::ofstream& outFile, const int quantizationTable[8][8]) {
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            outFile.write(reinterpret_cast<const char*>(&quantizationTable[i][j]), sizeof(int));
+        }
+    }
+}
+
+// 허프만 테이블 저장 (DC 및 AC 모두 지원)
+template<typename KeyType>
+void WriteHuffmanTable(std::ofstream& outFile, const std::map<KeyType, std::string>& huffmanTable) {
+    size_t size = huffmanTable.size();
+    outFile.write(reinterpret_cast<const char*>(&size), sizeof(size)); // 테이블 크기 저장
+    
+    for (const auto& entry : huffmanTable) {
+        outFile.write(reinterpret_cast<const char*>(&entry.first), sizeof(entry.first)); // 심볼 또는 (Run/Size)
+        size_t codeLength = entry.second.size();
+        outFile.write(reinterpret_cast<const char*>(&codeLength), sizeof(codeLength));   // 코드 길이
+        outFile.write(entry.second.c_str(), codeLength); // 허프만 코드
+    }
+}
+
+// 압축 데이터 저장
+void WriteCompressedData(std::ofstream& outFile, const std::string& compressedData) {
+    size_t length = compressedData.size();
+    outFile.write(reinterpret_cast<const char*>(&length), sizeof(length)); // 데이터 길이
+    outFile.write(compressedData.c_str(), length); // 데이터 저장
+}
+
+// 압축률률 계산 및 비교 함수
+void CompareFileSize(const std::string& originalFile, const std::string& compressedFile) {
+    std::ifstream original(originalFile, std::ios::binary | std::ios::ate);
+    std::ifstream compressed(compressedFile, std::ios::binary | std::ios::ate);
+
+    if (original.is_open() && compressed.is_open()) {
+        size_t originalSize = original.tellg();
+        size_t compressedSize = compressed.tellg();
+        double compressionRatio = (double)compressedSize / originalSize * 100;
+
+        std::cout << "Original File Size: " << originalSize << " bytes" << std::endl;
+        std::cout << "Compressed File Size: " << compressedSize << " bytes" << std::endl;
+        std::cout << "Compression Ratio: " << compressionRatio << " %" << std::endl;
+
+        original.close();
+        compressed.close();
+    } else {
+        std::cerr << "Error opening files for comparison!" << std::endl;
+    }
+}
+
 int main()
 {
     bmp_byte* pixels;
@@ -361,7 +413,7 @@ int main()
     FILE* imageFile; //���� ������ 
     FILE* outputFile;
     ReadImage("HW3_Lena.bmp", "HW3_Lena_out.bmp", &pixels, &width, &height, &bytesPerPixel, imageFile, outputFile);
-    WriteImage(pixels, width, height, bytesPerPixel, outputFile);
+    // WriteImage(pixels, width, height, bytesPerPixel, outputFile); // 이미지 그냥 다시 write
 
     std::vector<std::vector<bmp_byte> > blocks;
     DivideIntoBlocks(pixels, width, height, bytesPerPixel, blocks);
@@ -429,9 +481,9 @@ int main()
     CalculateDCFrequency(dpcmValues, DCfrequencyMap);
 
     // DPCM 결과 출력
-    std::cout << "DPCM Result:\n";
-    PrintDCValues(dpcmValues);
-    std::cout << "----------------------\n";
+    // std::cout << "DPCM Result:\n";
+    // PrintDCValues(dpcmValues);
+    // std::cout << "----------------------\n";
 
     // 8x8 블록 테스트 데이터 (임의의 예제 데이터)
     // std::vector<bmp_byte> testBlock = {
@@ -449,13 +501,31 @@ int main()
     // PerformDCT(testBlock, dctBlock);
     // PrintDCTBlock(dctBlock); // 결과 출력
 
+    std::map<int, std::string> dcHuffmanTable; // DC Huffman Table
+    std::map<std::pair<int, int>, std::string> acHuffmanTable; // AC Huffman Table
+    std::string compressedDCData, compressedACData; // 압축된 데이터
+
     // DC 값 허프만 코드 생성
     std::cout << "\nDC Huffman Codes:\n";
-    getHuffmanCode(DCfrequencyMap);
+    getHuffmanCode(DCfrequencyMap, dcHuffmanTable);
 
     // AC 값 허프만 코드 생성
     std::cout << "AC Huffman Codes:\n";
-    getHuffmanCodeForAC(acFrequencyMap);
+    getHuffmanCodeForAC(acFrequencyMap, acHuffmanTable);
+
+    // DC 및 AC 데이터 압축 코드 (생략) 후 결과 저장
+    std::ofstream outFile("compressed_Lena.dat", std::ios::binary);
+    if (outFile.is_open()) {
+        WriteQuantizationTable(outFile, quantizationTable);
+        WriteHuffmanTable(outFile, dcHuffmanTable);
+        WriteHuffmanTable(outFile, acHuffmanTable);
+        WriteCompressedData(outFile, compressedDCData);
+        WriteCompressedData(outFile, compressedACData);
+        outFile.close();
+        std::cout << "Compression completed successfully and saved to 'compressed_image.dat'." << std::endl;
+    } else {
+        std::cerr << "Error opening file for writing!" << std::endl;
+    }
 
     return 0;
 }
