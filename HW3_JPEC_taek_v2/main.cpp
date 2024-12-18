@@ -15,6 +15,8 @@
 #include <vector>
 #include <utility>
 #include <fstream>
+#include <bitset>
+
 
 typedef unsigned int int32;
 typedef short int16;
@@ -305,13 +307,16 @@ void PerformDPCM(const std::vector<int>& dcValues, std::vector<int>& dpcmValues)
 
 // DPCM 수행 후 DC 값 확인용 출력 함수
 void PrintDCValues(const std::vector<int>& values) {
+    int count = 0;
     for (size_t i = 0; i < values.size(); ++i) {
         std::cout << values[i] << " ";
+        count++;
     }
     std::cout << "\n";
+    cout << count;
 }
 
-// DPCM 값의 빈도를 계산하는 함수
+// DPCM 값의 사이즈별 빈도를 계산하는 함수
 void CalculateDCFrequency(const std::vector<int>& dpcmValues, std::map<int, int>& frequencyMap) {
     for (int value : dpcmValues) {
         frequencyMap[value]++;
@@ -323,16 +328,43 @@ int CalculateSize(int value) {
     return static_cast<int>(std::log2(std::abs(value)) + 1);
 }
 
-// dpcm을 sigend 이진수로 변환
+// // dpcm을 sigend 이진수로 변환
+// std::string EncodeAmplitude(int value, int size) {
+//     if (value == 0) return ""; // 0일 경우 처리 필요 없음
+
+//     std::string result;
+
+//     if (value > 0) {
+//         // 양수 값: 절댓값을 그대로 이진수 변환
+//         result = std::bitset<32>(value).to_string().substr(32 - size);
+//     } else {
+//         // 음수 값: 절댓값을 1의 보수로 변환
+//         int absValue = -value;
+//         int inverted = (1 << size) - 1 - absValue; // 음수는 크기만큼 1의 보수를 적용
+//         result = std::bitset<32>(inverted).to_string().substr(32 - size);
+//     }
+
+//     return result;
+// }
+//2
 std::string EncodeAmplitude(int value, int size) {
-    if (value >= 0) {
-        // 양수는 그대로 이진 표현
-        return std::bitset<32>(value).to_string().substr(32 - size);
-    } else {
-        // 음수는 2의 보수로 부호화
-        int magnitude = (1 << size) + value; // value가 음수임
-        return std::bitset<32>(magnitude).to_string().substr(32 - size);
+    // 1. 절댓값 계산
+    int absoluteValue = std::abs(value);
+
+    // 2. 절댓값을 이진수 문자열로 변환
+    std::string binaryRepresentation = std::bitset<32>(absoluteValue).to_string(); // 32비트로 변환
+
+    // 필요한 비트만 추출 (size 길이만큼)
+    binaryRepresentation = binaryRepresentation.substr(32 - size);
+
+    // 3. 음수인 경우 1의 보수로 반전
+    if (value < 0) {
+        for (char& bit : binaryRepresentation) {
+            bit = (bit == '0') ? '1' : '0'; // 비트를 반전
+        }
     }
+
+    return binaryRepresentation;
 }
 
 std::string EncodeDPCMValues(const std::vector<int>& dpcmValues, const std::map<int, std::string>& dcHuffmanTable) {
@@ -352,6 +384,13 @@ std::string EncodeDPCMValues(const std::vector<int>& dpcmValues, const std::map<
 
         // 3. DPCM 값을 크기만큼 이진화
         std::string amplitudeBits = EncodeAmplitude(value, size);
+
+        //  // 디버깅용 출력문 추가
+        // std::cout << "DPCM Value: " << value 
+        //           << ", SIZE: " << size 
+        //           << ", Huffman Code: " << huffmanCode 
+        //           << ", Amplitude Bits: " << amplitudeBits 
+        //           << std::endl;
 
         // 4. 허프만 코드 + 이진화된 값을 결합
         encodedData += huffmanCode + amplitudeBits;
@@ -386,10 +425,13 @@ void PerformRLC(const std::vector<int>& acValues, std::vector<std::pair<int, int
 
 // RLC 결과 출력 함수
 void PrintRLCResults(const std::vector<std::pair<int, int> >& rlcResults) {
+    int count = 0;
     for (const std::pair<int, int>& pair : rlcResults) {
         std::cout << "(" << pair.first << ", " << pair.second << ") ";
+        count++;
     }
     std::cout << "\n";
+    cout << count;
 }
 
 // AC 빈도 계산
@@ -457,7 +499,7 @@ void WriteHuffmanTable(std::ofstream& outFile, const std::map<int, std::string>&
 }
 
 void WriteCompressedData(std::ofstream& outFile, const std::string& compressedData) {
-    size_t bitLength = compressedData.size();
+    size_t bitLength = compressedData.size(); //DC또는 AC비트스트림의 전체비트길이를 먼저 저장!!!
     outFile.write(reinterpret_cast<const char*>(&bitLength), sizeof(bitLength)); // 전체 비트 길이 저장
 
     // 비트 데이터를 바이트 단위로 변환하여 저장
@@ -528,11 +570,12 @@ int main()
 
     // 각 블록에 대해 수행
     for (size_t i = 0; i < blocks.size(); ++i) {
+        
         double dctBlock[8][8] = {0};
         // DCT 수행
         PerformDCT(blocks[i], dctBlock);
 
-        // DCT 결과 출력 (옵션)
+        // //DCT 결과 출력 (옵션)
         // std::cout << "Block " << i << " DCT Result:\n";
         // PrintDCTBlock(dctBlock);
         // std::cout << "----------------------\n";
@@ -541,15 +584,16 @@ int main()
         int quantizedBlock[8][8] = {0};
         PerformQuantization(dctBlock, quantizedBlock);
 
-        // 양자화 결과 출력
+        // //양자화 결과 출력
         // std::cout << "Block " << i << " Quantized Result:\n";
         // PrintQuantizedBlock(quantizedBlock);
         // std::cout << "----------------------\n";
 
         std::vector<int> zigzagArray;
+        zigzagArray.clear();
         ZigzagScan(quantizedBlock, zigzagArray);
 
-        // zigzagScan 결과 출력
+        // //zigzagScan 결과 출력
         // std::cout << "Block " << i << " Zigzag Scanned Result:\n";
         // PrintZigzagArray(zigzagArray);
         // std::cout << "----------------------\n";
@@ -571,14 +615,28 @@ int main()
         // PrintRLCResults(blockRLCResults);
         // std::cout << "----------------------\n";
 
-        // 6. RLC 결과를 전체 AC 데이터에 합침
+        // RLC 결과를 전체 AC 데이터에 합침
         rlcResults.insert(rlcResults.end(), blockRLCResults.begin(), blockRLCResults.end());
     }
-    
+    // //dc발류 출력
+    // for (size_t i = 0; i < dcValues.size(); ++i) {
+    //    std::cout << " DC[" << i << "]: " << dcValues[i] ;
+    // }
+
     // DPCM 수행
     std::vector<int> dpcmValues;
     PerformDPCM(dcValues, dpcmValues);
-    // DPCM 결과 출력
+
+    // //dpcm발류 출력
+    // for (size_t i = 0; i < dpcmValues.size(); ++i) {
+    //    std::cout << " DPCM[" << i << "]: " << dpcmValues[i] ;
+    // }
+
+
+//     for (size_t i = 0; i < dpcmValues.size(); ++i) {
+//     std::cout << "DPCM[" << i << "]: " << dpcmValues[i] << std::endl;
+// }
+    // //DPCM 결과 출력 ---------정상!!!!
     // std::cout << "DPCM Result:\n";
     // PrintDCValues(dpcmValues);
     // std::cout << "----------------------\n";
@@ -604,7 +662,7 @@ int main()
     // std::cout << "Compressed DC Data (Huffman Encoded):" << std::endl;
     // std::cout << compressedDCData << std::endl;
 
-    // 3. AC 빈도 계산 및 허프만 테이블 생성
+    // AC 빈도 계산 및 허프만 테이블 생성
     std::map<std::string, int> acFrequencyMap;
     CalculateACFrequency(rlcResults, acFrequencyMap);
     std::map<std::string, std::string> acHuffmanTable;
@@ -612,11 +670,9 @@ int main()
 
     // AC 데이터 엔트로피 코딩
     std::string compressedACData = EncodeACValues(rlcResults, acHuffmanTable);
-
-    // 결과 출력
-    std::cout << "Compressed AC Data (Huffman Encoded):" << std::endl;
-    std::cout << compressedACData << std::endl;
-
+    // // 결과 출력
+    // std::cout << "Compressed AC Data (Huffman Encoded):" << std::endl;
+    // std::cout << compressedACData << std::endl;
 
     // 압축된 데이터 저장
     std::ofstream compressedFile("compressed_Lena.dat", std::ios::binary);
@@ -627,7 +683,7 @@ int main()
         WriteCompressedData(compressedFile, compressedDCData);   // DC 데이터
         WriteCompressedData(compressedFile, compressedACData);   // AC 데이터
         compressedFile.close();
-        std::cout << "Compressed data saved to 'compressed_data.bin'." << std::endl;
+        std::cout << "Compressed data saved to 'compressed_data.dat'." << std::endl;
     } else {
         std::cerr << "Error: Unable to save compressed data!" << std::endl;
     }
